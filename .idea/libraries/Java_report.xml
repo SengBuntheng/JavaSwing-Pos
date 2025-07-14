@@ -1,0 +1,44 @@
+<component name="libraryTable">
+  <library name="Java_report">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/barbecue-1.5-beta1.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/cglib-2.1.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-beanutils-1.8.2.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-codec-1.10.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-collections-3.2.1.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-dbcp-1.2.2.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-digester-1.7.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-email-1.5-tests.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-email-1.5.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-logging-1.1.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/dom4j-1.6.1.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/groovy-all-1.7.5.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/iText-2.1.7.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/jasperreports-4.5.0.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/jasperreports-json.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/jcalendar-1.3.2.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/jcommon-1.0.15.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/jdt-compiler-3.1.1.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/jfreechart-1.0.12.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/jl1.0.1.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/jxl.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/KabitaLib.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/mail-1.4.7.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/poi-3.6.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/poi-3.10.1-20140818.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/poi-ooxml-3.10.1-20140818.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/poi-ooxml-schemas-3.10.1-20140818.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/xmlbeans-2.6.0.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/mysql-connector-java-8.0.18.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-email-1.5-javadoc.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/jcalendar-1.3.2-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-email-1.5-sources.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/commons-email-1.5-test-sources.jar!/" />
+      <root url="jar://$USER_HOME$/OneDrive/Desktop/New folder/jcalendar-1.3.2-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
