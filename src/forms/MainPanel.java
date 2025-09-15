@@ -1,638 +1,576 @@
 package forms;
 
 import globalValues.DBConnection;
+import globalValues.Products;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
+import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.JTableHeader;
-import javax.swing.table.TableCellRenderer;
 import java.awt.*;
-import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Ellipse2D;
 import java.awt.image.BufferedImage;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.URL;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
-import java.util.Vector;
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainPanel extends JFrame {
 
-    // --- Professional POS UI Design Constants ---
-    private static final Color COLOR_BG_MAIN = new Color(248, 249, 250);
-    private static final Color COLOR_BG_HEADER = new Color(33, 37, 41);
-    private static final Color COLOR_BG_PANEL = Color.WHITE;
-    private static final Color COLOR_PRIMARY = new Color(13, 110, 253);
-    private static final Color COLOR_SECONDARY = new Color(108, 117, 125);
-    private static final Color COLOR_SUCCESS = new Color(25, 135, 84);
-    private static final Color COLOR_DANGER = new Color(220, 53, 69);
-    private static final Color COLOR_TEXT_DARK = new Color(33, 37, 41);
-    private static final Color COLOR_TEXT_LIGHT = Color.WHITE;
-    private static final Color COLOR_BORDER = new Color(222, 226, 230);
-    private static final Color COLOR_TOOLBAR_HOVER = new Color(233, 236, 239);
+    private final String userID, userRole;
+    private final Map<String, Products> productsMap = new HashMap<>();
+    private final Map<String, CartItem> cartItemsMap = new HashMap<>();
 
-    private static final Font FONT_MAIN = new Font("Segoe UI", Font.PLAIN, 15);
-    private static final Font FONT_BOLD = new Font("Segoe UI", Font.BOLD, 15);
-    private static final Font FONT_HEADER = new Font("Segoe UI Semibold", Font.PLAIN, 24);
-    private static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 18);
-    private static final Font FONT_SMALL = new Font("Segoe UI", Font.PLAIN, 13);
+    private JLabel lblSubTotalValue, lblTaxValue, lblTotalValue, lblSelectedCustomer;
+    private JPanel productGridPanel, cartItemsPanel, categoryPanel;
+    private JTextField txtDiscount;
+    private JButton btnPay;
+    private String selectedCustomerId = null;
 
-    // --- Member Variables ---
-    private JTextField txtSearch;
-    private final String userID;
-    private final String userRole;
-    private JLabel lblProfileImage;
-    private JTable customerTable;
-    private DefaultTableModel customerTableModel;
-    private JTable saleTable;
-    private DefaultTableModel saleTableModel;
-    private JLabel lblSubtotalValue;
-    private JLabel lblTaxValue;
-    private JLabel lblTotalValue;
+    private static class CartItem {
+        Products product;
+        int quantity;
+        JLabel quantityLabel, priceLabel;
+        JPanel panel;
+        CartItem(Products p, int qty) { this.product = p; this.quantity = qty; }
+    }
 
-
-    public MainPanel(String userID, String userRole) {
+    public MainPanel(String userID, String userRole , String username) {
         this.userID = userID;
         this.userRole = userRole;
-        setTitle("SU7.9 Professional POS — " + userID + " (" + userRole + ")");
+
+        setTitle("Main Application Dashboard" + userID);
         setExtendedState(JFrame.MAXIMIZED_BOTH);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
         initUI();
-        loadCustomers(); // Load initial customer list
-        setVisible(true);
     }
 
     private void initUI() {
-        // Set global rendering hints for smoother text and graphics
-        UIManager.put("swing.aatext", true);
-        UIManager.put("awt.useSystemAAFontSettings", "on");
-
-        getContentPane().setBackground(COLOR_BG_MAIN);
+        UITheme.applyProfessionalLook();
+        getContentPane().setBackground(UITheme.BACKGROUND);
         setLayout(new BorderLayout());
-
         add(createHeaderPanel(), BorderLayout.NORTH);
-
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, createLeftPanel(), createRightPanel());
-        splitPane.setDividerLocation(0.7); // 70% for left panel, 30% for right
-        splitPane.setResizeWeight(0.7);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, createProductDisplayPanel(), createCheckoutPanel());
+        splitPane.setDividerLocation(0.65);
+        splitPane.setResizeWeight(0.65);
         splitPane.setBorder(null);
         add(splitPane, BorderLayout.CENTER);
+        loadCategories();
+        loadProducts("All");
+        setVisible(true);
     }
+
+    // --- UI Panel Creation ---
 
     private JPanel createHeaderPanel() {
         JPanel headerPanel = new JPanel(new BorderLayout(20, 0));
-        headerPanel.setBackground(COLOR_BG_HEADER);
-        headerPanel.setBorder(new EmptyBorder(10, 20, 10, 20));
+        headerPanel.setBackground(UITheme.PRIMARY_GREEN);
+        headerPanel.setBorder(new EmptyBorder(8, 25, 8, 25));
+        JLabel lblTitle = new JLabel("POS System");
+        lblTitle.setFont(UITheme.FONT_HEADER);
+        lblTitle.setForeground(Color.WHITE);
+        headerPanel.add(lblTitle, BorderLayout.WEST);
 
-        JPanel profilePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
-        profilePanel.setOpaque(false);
-        lblProfileImage = new JLabel();
-        lblProfileImage.setPreferredSize(new Dimension(50, 50));
-        loadUserProfilePicture();
-        profilePanel.add(lblProfileImage);
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
+        rightPanel.setOpaque(false);
+        JButton btnSelectCustomer = new JButton("Select Customer");
+        UITheme.stylePrimaryButton(btnSelectCustomer);
+        btnSelectCustomer.setBackground(UITheme.ACCENT_GREEN);
+        btnSelectCustomer.setForeground(UITheme.PRIMARY_GREEN);
+        btnSelectCustomer.addActionListener(e -> selectCustomer());
+        rightPanel.add(btnSelectCustomer);
 
-        JLabel lblWelcome = new JLabel("Welcome, " + userID);
-        lblWelcome.setFont(FONT_HEADER);
-        lblWelcome.setForeground(COLOR_TEXT_LIGHT);
-        profilePanel.add(lblWelcome);
-        headerPanel.add(profilePanel, BorderLayout.WEST);
+        if(userRole.equalsIgnoreCase("Admin")) rightPanel.add(createAdminMenu());
 
-        JButton btnLogout = createHeaderButton("Logout", "https://img.icons8.com/fluency-systems-regular/24/ffffff/exit.png", this::onLogout);
-        headerPanel.add(btnLogout, BorderLayout.EAST);
+        JLabel lblProfileImage = createCircularImageLabel("https://img.icons8.com/ios-filled/100/ffffff/user-male-circle.png");
+        loadUserProfilePicture(lblProfileImage);
+        rightPanel.add(lblProfileImage);
 
+        JLabel lblUsername = new JLabel(userID);
+        lblUsername.setFont(new Font("Segoe UI Semibold", Font.PLAIN, 18));
+        lblUsername.setForeground(Color.WHITE);
+        rightPanel.add(lblUsername);
+
+        headerPanel.add(rightPanel, BorderLayout.EAST);
         return headerPanel;
     }
 
-    private JPanel createLeftPanel() {
-        JPanel leftPanel = new JPanel(new BorderLayout(10, 15));
+    private JPanel createProductDisplayPanel() {
+        JPanel leftPanel = new JPanel(new BorderLayout(15, 20));
         leftPanel.setBorder(new EmptyBorder(15, 20, 20, 10));
-        leftPanel.setBackground(COLOR_BG_MAIN);
+        leftPanel.setBackground(UITheme.BACKGROUND);
+        leftPanel.add(createTopBar(), BorderLayout.NORTH);
 
-        JPanel actionsPanel = new JPanel(new BorderLayout(0, 10));
-        actionsPanel.setOpaque(false);
-        actionsPanel.add(createSearchPanel(), BorderLayout.NORTH);
-        actionsPanel.add(createToolbarPanel(), BorderLayout.CENTER);
-
-        leftPanel.add(actionsPanel, BorderLayout.NORTH);
-        leftPanel.add(createCustomerTablePanel(), BorderLayout.CENTER);
-
+        productGridPanel = new JPanel(new WrapLayout(FlowLayout.LEFT, 15, 15));
+        productGridPanel.setBackground(UITheme.BACKGROUND);
+        JScrollPane scrollPane = new JScrollPane(productGridPanel);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        leftPanel.add(scrollPane, BorderLayout.CENTER);
+        leftPanel.add(createCategoryPanel(), BorderLayout.SOUTH);
         return leftPanel;
     }
 
-    private JPanel createRightPanel() {
+    private JPanel createTopBar() {
+        JPanel topPanel = new JPanel(new BorderLayout(15, 0));
+        topPanel.setOpaque(false);
+        JButton btnAddItem = new JButton("+ Add New Item");
+        UITheme.stylePrimaryButton(btnAddItem);
+        btnAddItem.addActionListener(e -> new AddItemDialog(this).setVisible(true));
+        if (!userRole.equalsIgnoreCase("Admin")) btnAddItem.setVisible(false);
+        topPanel.add(btnAddItem, BorderLayout.WEST);
+
+        JPanel searchPanel = new JPanel(new BorderLayout(5, 0));
+        searchPanel.setBackground(UITheme.PANEL_BG);
+        searchPanel.setBorder(UITheme.BORDER_NORMAL);
+        JTextField txtSearch = new JTextField("Search items here...");
+        txtSearch.setBorder(new EmptyBorder(10, 12, 10, 12));
+        txtSearch.setForeground(UITheme.TEXT_LIGHT);
+        txtSearch.addActionListener(e -> loadProducts(txtSearch.getText()));
+        searchPanel.add(txtSearch, BorderLayout.CENTER);
+        JButton btnSearch = new JButton(createIcon("https://img.icons8.com/material-rounded/20/ffffff/search.png"));
+        UITheme.stylePrimaryButton(btnSearch);
+        btnSearch.setBorder(null);
+        searchPanel.add(btnSearch, BorderLayout.EAST);
+        topPanel.add(searchPanel, BorderLayout.CENTER);
+        return topPanel;
+    }
+
+    private JPanel createCategoryPanel() {
+        categoryPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        categoryPanel.setBackground(UITheme.PANEL_BG);
+        categoryPanel.setBorder(UITheme.BORDER_NORMAL);
+        return categoryPanel;
+    }
+
+    private JPanel createCheckoutPanel() {
         JPanel rightPanel = new JPanel(new BorderLayout(10, 15));
         rightPanel.setBorder(new EmptyBorder(15, 10, 20, 20));
-        rightPanel.setBackground(COLOR_BG_MAIN);
+        rightPanel.setBackground(UITheme.PANEL_BG);
 
-        JLabel lblTitle = new JLabel("Current Sale");
-        lblTitle.setFont(FONT_TITLE);
-        lblTitle.setForeground(COLOR_TEXT_DARK);
-        lblTitle.setBorder(new EmptyBorder(0, 5, 5, 0));
-        rightPanel.add(lblTitle, BorderLayout.NORTH);
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+        header.add(new JLabel("Checkout"), BorderLayout.WEST);
+        lblSelectedCustomer = new JLabel("(Guest)", SwingConstants.RIGHT);
+        header.add(lblSelectedCustomer, BorderLayout.EAST);
+        rightPanel.add(header, BorderLayout.NORTH);
 
-        rightPanel.add(createSaleTablePanel(), BorderLayout.CENTER);
+        cartItemsPanel = new JPanel();
+        cartItemsPanel.setLayout(new BoxLayout(cartItemsPanel, BoxLayout.Y_AXIS));
+        cartItemsPanel.setBackground(UITheme.PANEL_BG);
+        JScrollPane scrollPane = new JScrollPane(cartItemsPanel);
+        scrollPane.setBorder(null);
+        scrollPane.getViewport().setBackground(UITheme.PANEL_BG);
+        rightPanel.add(scrollPane, BorderLayout.CENTER);
         rightPanel.add(createSaleActionsPanel(), BorderLayout.SOUTH);
-
         return rightPanel;
     }
 
-    private JPanel createSearchPanel() {
-        JPanel searchPanel = new JPanel(new BorderLayout(10, 0));
-        searchPanel.setOpaque(false);
-
-        txtSearch = new JTextField("Search by Customer ID or Name...");
-        txtSearch.setFont(FONT_MAIN);
-        txtSearch.setForeground(Color.GRAY);
-        txtSearch.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 1, 1, 1, COLOR_BORDER),
-                new EmptyBorder(8, 10, 8, 10)
-        ));
-        txtSearch.addActionListener(e -> searchCustomers());
-        // Placeholder text functionality
-        txtSearch.addFocusListener(new java.awt.event.FocusAdapter() {
-            public void focusGained(java.awt.event.FocusEvent evt) {
-                if (txtSearch.getText().equals("Search by Customer ID or Name...")) {
-                    txtSearch.setText("");
-                    txtSearch.setForeground(COLOR_TEXT_DARK);
-                }
-            }
-            public void focusLost(java.awt.event.FocusEvent evt) {
-                if (txtSearch.getText().isEmpty()) {
-                    txtSearch.setForeground(Color.GRAY);
-                    txtSearch.setText("Search by Customer ID or Name...");
-                }
-            }
-        });
-        searchPanel.add(txtSearch, BorderLayout.CENTER);
-
-        JButton btnSearch = createPrimaryButton("Search", "https://img.icons8.com/material-rounded/20/ffffff/search.png", e -> searchCustomers());
-        searchPanel.add(btnSearch, BorderLayout.EAST);
-
-        return searchPanel;
-    }
-
-    private JToolBar createToolbarPanel() {
-        JToolBar toolbar = new JToolBar();
-        toolbar.setFloatable(false);
-        toolbar.setRollover(true);
-        toolbar.setBorder(new EmptyBorder(10, 0, 0, 0));
-        toolbar.setOpaque(false);
-
-        toolbar.add(createToolbarButton("New Customer", "https://img.icons8.com/fluency-systems-regular/24/212529/add-user-male.png", this::openNewCustomerDialog));
-        toolbar.add(createToolbarButton("View All", "https://img.icons8.com/fluency-systems-regular/24/212529/user-group-man-man.png", this::onViewCustomers));
-        toolbar.addSeparator(new Dimension(10,0));
-        toolbar.add(createToolbarButton("Add to Sale", "https://img.icons8.com/fluency-systems-regular/24/212529/shopping-cart.png", this::onOrderItem));
-        toolbar.add(createToolbarButton("View Orders", "https://img.icons8.com/fluency-systems-regular/24/212529/order-history.png", this::onCustomerOrderDetail));
-
-        if (userRole.equalsIgnoreCase("Admin")) {
-            toolbar.addSeparator(new Dimension(10,0));
-            JButton adminMenuButton = createAdminMenuButton();
-            toolbar.add(adminMenuButton);
-        }
-
-        return toolbar;
-    }
-
-    private JButton createAdminMenuButton() {
-        JButton adminButton = createToolbarButton("Admin Tools", "https://img.icons8.com/fluency-systems-regular/24/212529/admin-settings-male.png", null);
-
-        JPopupMenu adminPopupMenu = new JPopupMenu();
-        JMenuItem addItem = new JMenuItem("Add New Item", getIcon("https://img.icons8.com/fluency-systems-regular/20/212529/plus--v1.png"));
-        addItem.addActionListener(this::onAddItem);
-        adminPopupMenu.add(addItem);
-
-        JMenuItem updateItem = new JMenuItem("Update Existing Item", getIcon("https://img.icons8.com/fluency-systems-regular/20/212529/edit--v1.png"));
-        updateItem.addActionListener(this::onUpdateItem);
-        adminPopupMenu.add(updateItem);
-
-        JMenuItem deleteItem = new JMenuItem("Delete Item", getIcon("https://img.icons8.com/fluency-systems-regular/20/212529/delete-sign.png"));
-        deleteItem.addActionListener(this::onDeleteItem);
-        adminPopupMenu.add(deleteItem);
-
-        adminPopupMenu.addSeparator();
-
-        JMenuItem changePass = new JMenuItem("Change Password", getIcon("https://img.icons8.com/fluency-systems-regular/20/212529/lock--v1.png"));
-
-
-        adminButton.addActionListener(e -> adminPopupMenu.show(adminButton, 0, adminButton.getHeight()));
-
-        return adminButton;
-    }
-
-    private JScrollPane createCustomerTablePanel() {
-        customerTableModel = new DefaultTableModel(new Object[]{"Customer ID", "Name"}, 0) {
-            @Override
-            public boolean isCellEditable(int row, int col) { return false; }
-        };
-
-        customerTable = new JTable(customerTableModel);
-        styleTable(customerTable);
-
-        JScrollPane scrollPane = new JScrollPane(customerTable);
-        scrollPane.setBorder(BorderFactory.createLineBorder(COLOR_BORDER));
-        return scrollPane;
-    }
-
-    private JScrollPane createSaleTablePanel() {
-        // Add "Item Code" as a hidden first column for logic
-        saleTableModel = new DefaultTableModel(new Object[]{"Item Code", "Item", "Qty", "Price", "Total"}, 0) {
-            @Override
-            public boolean isCellEditable(int row, int col) { return false; }
-        };
-        saleTable = new JTable(saleTableModel);
-        styleTable(saleTable);
-
-        // Hide the Item Code column from the user
-        saleTable.getColumnModel().getColumn(0).setMinWidth(0);
-        saleTable.getColumnModel().getColumn(0).setMaxWidth(0);
-        saleTable.getColumnModel().getColumn(0).setWidth(0);
-
-        JScrollPane scrollPane = new JScrollPane(saleTable);
-        scrollPane.setBorder(BorderFactory.createLineBorder(COLOR_BORDER));
-        return scrollPane;
-    }
-
     private JPanel createSaleActionsPanel() {
-        JPanel panel = new JPanel(new GridLayout(0, 1, 0, 10));
-        panel.setOpaque(false);
-        panel.setBorder(new EmptyBorder(10, 0, 0, 0));
+        JPanel mainPanel = new JPanel();
+        mainPanel.setOpaque(false);
+        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        mainPanel.add(createTotalsPanel());
+        mainPanel.add(Box.createVerticalStrut(10));
+        mainPanel.add(createActionButtonsPanel());
+        mainPanel.add(Box.createVerticalStrut(10));
+        btnPay = new JButton("Pay ($0.00)");
+        UITheme.stylePrimaryButton(btnPay);
+        btnPay.setFont(UITheme.FONT_TITLE);
+        btnPay.addActionListener(e -> onCheckout());
+        mainPanel.add(btnPay);
+        return mainPanel;
+    }
 
-        JPanel totalsPanel = new JPanel(new GridLayout(3, 2, 10, 5));
+    private JPanel createTotalsPanel() {
+        JPanel totalsPanel = new JPanel(new GridBagLayout());
         totalsPanel.setOpaque(false);
-
-        lblSubtotalValue = new JLabel("$0.00", SwingConstants.RIGHT);
-        lblSubtotalValue.setFont(FONT_MAIN);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0; gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.gridy = 0; gbc.anchor = GridBagConstraints.WEST;
+        totalsPanel.add(new JLabel("Discount (%)"), gbc);
+        txtDiscount = new JTextField("20");
+        txtDiscount.setHorizontalAlignment(JTextField.RIGHT);
+        txtDiscount.addActionListener(e -> updateCheckoutTotals());
+        gbc.anchor = GridBagConstraints.EAST;
+        totalsPanel.add(txtDiscount, gbc);
+        gbc.gridy++; gbc.anchor = GridBagConstraints.WEST;
+        totalsPanel.add(new JLabel("Sub Total"), gbc);
+        lblSubTotalValue = new JLabel("$0.00", SwingConstants.RIGHT);
+        gbc.anchor = GridBagConstraints.EAST;
+        totalsPanel.add(lblSubTotalValue, gbc);
+        gbc.gridy++; gbc.anchor = GridBagConstraints.WEST;
+        totalsPanel.add(new JLabel("Tax 1.5%"), gbc);
         lblTaxValue = new JLabel("$0.00", SwingConstants.RIGHT);
-        lblTaxValue.setFont(FONT_MAIN);
-        lblTotalValue = createBoldLabel("$0.00", SwingConstants.RIGHT);
-        lblTotalValue.setFont(new Font("Segoe UI", Font.BOLD, 18));
-
-        totalsPanel.add(createBoldLabel("Subtotal:", SwingConstants.LEFT));
-        totalsPanel.add(lblSubtotalValue);
-        totalsPanel.add(createBoldLabel("Tax (10%):", SwingConstants.LEFT));
-        totalsPanel.add(lblTaxValue);
-        totalsPanel.add(createBoldLabel("Total:", SwingConstants.LEFT));
-        totalsPanel.add(lblTotalValue);
-
-        panel.add(totalsPanel);
-
-        JButton btnCheckout = createSuccessButton("Checkout (F12)", "https://img.icons8.com/fluency-systems-regular/24/ffffff/banknotes.png", e -> onCheckout());
-        panel.add(btnCheckout);
-
-        JPanel minorActionsPanel = new JPanel(new GridLayout(1, 2, 10, 0));
-        minorActionsPanel.setOpaque(false);
-        minorActionsPanel.add(createSecondaryButton("Hold", "https://img.icons8.com/fluency-systems-regular/20/212529/pause--v1.png", e -> onHold()));
-        minorActionsPanel.add(createDangerButton("Clear", "https://img.icons8.com/fluency-systems-regular/20/ffffff/delete-sign.png", e -> onClearSale()));
-        panel.add(minorActionsPanel);
-
-        return panel;
+        gbc.anchor = GridBagConstraints.EAST;
+        totalsPanel.add(lblTaxValue, gbc);
+        gbc.gridy++; gbc.gridwidth = 2; gbc.insets = new Insets(10,0,10,0);
+        totalsPanel.add(new JSeparator(), gbc);
+        gbc.insets = new Insets(4,4,4,4);
+        gbc.gridy++; gbc.gridwidth = 1; gbc.anchor = GridBagConstraints.WEST;
+        JLabel totalLabel = new JLabel("Total");
+        totalLabel.setFont(UITheme.FONT_TITLE);
+        totalsPanel.add(totalLabel, gbc);
+        lblTotalValue = new JLabel("$0.00", SwingConstants.RIGHT);
+        lblTotalValue.setFont(UITheme.FONT_TITLE);
+        gbc.anchor = GridBagConstraints.EAST;
+        totalsPanel.add(lblTotalValue, gbc);
+        return totalsPanel;
     }
 
-    private void styleTable(JTable table) {
-        table.setFont(FONT_MAIN);
-        table.setRowHeight(40);
-        table.setGridColor(COLOR_BORDER);
-        table.setSelectionBackground(COLOR_PRIMARY);
-        table.setSelectionForeground(COLOR_TEXT_LIGHT);
-        table.setFillsViewportHeight(true);
-        table.setShowVerticalLines(false);
-        table.setIntercellSpacing(new Dimension(0, 1));
-
-        JTableHeader header = table.getTableHeader();
-        header.setFont(FONT_BOLD);
-        header.setBackground(new Color(241, 243, 245));
-        header.setForeground(COLOR_TEXT_DARK);
-        header.setPreferredSize(new Dimension(100, 45));
-        header.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, COLOR_BORDER));
-
-        TableCellRenderer renderer = (tbl, value, isSelected, hasFocus, row, column) -> {
-            JComponent c = (JComponent) new JTable().getDefaultRenderer(Object.class).getTableCellRendererComponent(tbl, value, isSelected, hasFocus, row, column);
-            if (!isSelected) {
-                c.setBackground(row % 2 == 0 ? new Color(248, 249, 250) : Color.WHITE);
-            }
-            return c;
-        };
-        for (int i = 0; i < table.getColumnCount(); i++) {
-            table.getColumnModel().getColumn(i).setCellRenderer(renderer);
-        }
+    private JPanel createActionButtonsPanel() {
+        JPanel buttonsPanel = new JPanel(new GridLayout(1, 2, 10, 0));
+        buttonsPanel.setOpaque(false);
+        JButton btnCancel = new JButton("Cancel Order");
+        UITheme.styleSecondaryButton(btnCancel, UITheme.CANCEL_COLOR);
+        btnCancel.addActionListener(e -> onClearSale());
+        buttonsPanel.add(btnCancel);
+        JButton btnHold = new JButton("Hold Order");
+        UITheme.styleSecondaryButton(btnHold, UITheme.HOLD_COLOR);
+        buttonsPanel.add(btnHold);
+        return buttonsPanel;
     }
 
-    // --- Button Factory Methods ---
 
-    private JButton createToolbarButton(String text, String iconUrl, ActionListener actionListener) {
-        JButton button = new JButton(text);
-        button.setFont(FONT_SMALL);
-        button.setFocusPainted(false);
-        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        if (actionListener != null) {
-            button.addActionListener(actionListener);
-        }
-        button.setHorizontalTextPosition(SwingConstants.CENTER);
-        button.setVerticalTextPosition(SwingConstants.BOTTOM);
-        button.setOpaque(false);
-        button.setBackground(COLOR_BG_MAIN);
-        button.setBorder(new EmptyBorder(5, 10, 5, 10));
-        button.setForeground(COLOR_TEXT_DARK);
-        button.setIcon(getIcon(iconUrl));
+    // --- UI Component Creation ---
+    private JComponent createImagePlaceholder() {
+        JPanel placeholder = new JPanel(new GridBagLayout());
+        placeholder.setBackground(new Color(230, 230, 230));
+        JLabel placeholderText = new JLabel("No Image");
+        placeholderText.setFont(new Font("Segoe UI", Font.ITALIC, 14));
+        placeholderText.setForeground(Color.GRAY);
+        placeholder.add(placeholderText);
+        return placeholder;
+    }
 
-        button.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) { button.setOpaque(true); button.setBackground(COLOR_TOOLBAR_HOVER); }
-            public void mouseExited(MouseEvent e) { button.setOpaque(false); button.setBackground(COLOR_BG_MAIN); }
+    private JPanel createProductCard(Products product) {
+        JPanel card = new JPanel(new BorderLayout(5, 5));
+        card.setPreferredSize(new Dimension(170, 180));
+        card.setBackground(UITheme.PANEL_BG);
+        card.setBorder(UITheme.BORDER_NORMAL);
+        card.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        card.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) { addItemToCart(product); }
+            public void mouseEntered(MouseEvent e) { card.setBorder(UITheme.BORDER_HOVER); }
+            public void mouseExited(MouseEvent e) { card.setBorder(UITheme.BORDER_NORMAL); }
         });
-        return button;
+        card.add(createImagePlaceholder(), BorderLayout.CENTER);
+        JPanel infoPanel = new JPanel();
+        infoPanel.setOpaque(false);
+        infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
+        infoPanel.setBorder(new EmptyBorder(5, 10, 10, 10));
+        JLabel lblName = new JLabel(product.getName());
+        lblName.setFont(UITheme.FONT_MAIN);
+        lblName.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel lblPrice = new JLabel(new DecimalFormat("$#,##0.00").format(product.getPrice()));
+        lblPrice.setFont(UITheme.FONT_PRICE);
+        lblPrice.setAlignmentX(Component.CENTER_ALIGNMENT);
+        infoPanel.add(lblName);
+        infoPanel.add(lblPrice);
+        card.add(infoPanel, BorderLayout.SOUTH);
+        return card;
     }
 
-    private JButton createPrimaryButton(String text, String iconUrl, ActionListener actionListener) {
-        return createColoredButton(text, iconUrl, COLOR_PRIMARY, COLOR_TEXT_LIGHT, actionListener);
+    private JPanel createCartItemPanel(CartItem cartItem) {
+        JPanel p = new JPanel(new BorderLayout(10, 0));
+        p.setBackground(UITheme.PANEL_BG);
+        p.setBorder(new EmptyBorder(10, 5, 10, 5));
+        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
+        JLabel lblName = new JLabel(cartItem.product.getName());
+        p.add(lblName, BorderLayout.WEST);
+        JPanel qtyPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
+        qtyPanel.setOpaque(false);
+        JButton btnMinus = new JButton("-");
+        cartItem.quantityLabel = new JLabel(String.valueOf(cartItem.quantity));
+        cartItem.quantityLabel.setFont(UITheme.FONT_BOLD);
+        JButton btnPlus = new JButton("+");
+        btnPlus.addActionListener(e -> updateCartItemQuantity(cartItem.product.getProductID(), 1));
+        btnMinus.addActionListener(e -> updateCartItemQuantity(cartItem.product.getProductID(), -1));
+        qtyPanel.add(btnMinus);
+        qtyPanel.add(cartItem.quantityLabel);
+        qtyPanel.add(btnPlus);
+        p.add(qtyPanel, BorderLayout.CENTER);
+        BigDecimal itemTotal = cartItem.product.getPrice().multiply(new BigDecimal(cartItem.quantity));
+        cartItem.priceLabel = new JLabel(new DecimalFormat("$##0.00").format(itemTotal));
+        cartItem.priceLabel.setFont(UITheme.FONT_BOLD);
+        p.add(cartItem.priceLabel, BorderLayout.EAST);
+        cartItem.panel = p;
+        return p;
     }
 
-    private JButton createSuccessButton(String text, String iconUrl, ActionListener actionListener) {
-        return createColoredButton(text, iconUrl, COLOR_SUCCESS, COLOR_TEXT_LIGHT, actionListener);
+    // --- Data Loading and Logic ---
+    private void loadCategories() {
+        String[] categories = {"All", "Coffee", "Beverages", "Snacks", "Desserts"};
+        for (String cat : categories) {
+            JButton btn = new JButton(cat);
+            boolean isActive = cat.equals("All");
+            btn.setForeground(isActive ? UITheme.PRIMARY_GREEN : UITheme.TEXT_LIGHT);
+            btn.setBackground(UITheme.PANEL_BG);
+            btn.setFont(UITheme.FONT_BOLD);
+            btn.setBorder(new EmptyBorder(12, 25, 12, 25));
+            btn.addActionListener(e -> {
+                for (Component c : categoryPanel.getComponents()) {
+                    c.setForeground(UITheme.TEXT_LIGHT);
+                }
+                btn.setForeground(UITheme.PRIMARY_GREEN);
+                loadProducts(cat);
+            });
+            categoryPanel.add(btn);
+        }
     }
 
-    private JButton createDangerButton(String text, String iconUrl, ActionListener actionListener) {
-        return createColoredButton(text, iconUrl, COLOR_DANGER, COLOR_TEXT_LIGHT, actionListener);
-    }
-
-    private JButton createSecondaryButton(String text, String iconUrl, ActionListener actionListener) {
-        JButton button = createColoredButton(text, iconUrl, new Color(248,249,250), COLOR_TEXT_DARK, actionListener);
-        button.setBorder(BorderFactory.createLineBorder(COLOR_BORDER));
-        return button;
-    }
-
-    private JButton createHeaderButton(String text, String iconUrl, ActionListener actionListener) {
-        JButton button = createColoredButton(text, iconUrl, COLOR_BG_HEADER, COLOR_TEXT_LIGHT, actionListener);
-        button.setBorder(new EmptyBorder(5, 10, 5, 10));
-        return button;
-    }
-
-    private JButton createColoredButton(String text, String iconUrl, Color bg, Color fg, ActionListener actionListener) {
-        JButton button = new JButton(text);
-        button.setFont(FONT_BOLD);
-        button.setFocusPainted(false);
-        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        button.addActionListener(actionListener);
-        button.setBackground(bg);
-        button.setForeground(fg);
-        button.setBorder(new EmptyBorder(10, 20, 10, 20));
-        button.setIcon(getIcon(iconUrl));
-        return button;
-    }
-
-    private JLabel createBoldLabel(String text, int alignment) {
-        JLabel label = new JLabel(text, alignment);
-        label.setFont(FONT_BOLD);
-        return label;
-    }
-
-    private ImageIcon getIcon(String urlString) {
+    private void loadProducts(String filter) {
+        productGridPanel.removeAll();
+        productsMap.clear();
         try {
-            URL url = new URL(urlString);
-            return new ImageIcon(url);
-        } catch (Exception e) {
-            System.err.println("Failed to load icon: " + urlString);
-            return new ImageIcon();
-        }
-    }
-
-    private void loadUserProfilePicture() {
-        try {
-            String sql = "SELECT profile_picture FROM user_profile_picture WHERE user_id = ?";
-            PreparedStatement ps = DBConnection.con.prepareStatement(sql);
-            ps.setString(1, userID);
-            ResultSet rs = ps.executeQuery();
-            Image profileImg = (rs.next() && rs.getBytes("profile_picture") != null)
-                    ? Toolkit.getDefaultToolkit().createImage(rs.getBytes("profile_picture"))
-                    : ImageIO.read(new URL("https://img.icons8.com/ios-filled/100/ffffff/user-male-circle.png"));
-
-            lblProfileImage.setIcon(new ImageIcon(createCircularImage(profileImg, 50)));
-            rs.close();
-            ps.close();
-        } catch (Exception e) {
-            System.err.println("Error loading profile image: " + e.getMessage());
-        }
-    }
-
-    private static Image createCircularImage(Image image, int diameter) {
-        BufferedImage bufferedImage = new BufferedImage(diameter, diameter, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = bufferedImage.createGraphics();
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setClip(new Ellipse2D.Float(0, 0, diameter, diameter));
-        g2.drawImage(image, 0, 0, diameter, diameter, null);
-        g2.dispose();
-        return bufferedImage;
-    }
-
-    // --- Data Handling and Logic ---
-
-    public void addItemToCurrentSale(String itemCode, String description, int qty, BigDecimal unitPrice) {
-        for (int i = 0; i < saleTableModel.getRowCount(); i++) {
-            if (saleTableModel.getValueAt(i, 0).equals(itemCode)) {
-                int currentQty = (int) saleTableModel.getValueAt(i, 2);
-                int newQty = currentQty + qty;
-                BigDecimal newTotal = unitPrice.multiply(new BigDecimal(newQty));
-                saleTableModel.setValueAt(newQty, i, 2);
-                saleTableModel.setValueAt(newTotal, i, 4);
-                updateSaleTotals();
-                return;
-            }
-        }
-        BigDecimal total = unitPrice.multiply(new BigDecimal(qty));
-        saleTableModel.addRow(new Object[]{itemCode, description, qty, unitPrice, total});
-        updateSaleTotals();
-    }
-
-
-    private void updateSaleTotals() {
-        BigDecimal subtotal = BigDecimal.ZERO;
-        for (int i = 0; i < saleTableModel.getRowCount(); i++) {
-            Object totalValue = saleTableModel.getValueAt(i, 4);
-            subtotal = subtotal.add((BigDecimal) totalValue);
-        }
-
-        BigDecimal taxRate = new BigDecimal("0.10"); // 10% tax
-        BigDecimal tax = subtotal.multiply(taxRate);
-        BigDecimal total = subtotal.add(tax);
-
-        DecimalFormat df = new DecimalFormat("$#,##0.00");
-        lblSubtotalValue.setText(df.format(subtotal));
-        lblTaxValue.setText(df.format(tax));
-        lblTotalValue.setText(df.format(total));
-    }
-
-    private void searchCustomers() {
-        String term = txtSearch.getText().trim();
-        if (term.isEmpty() || term.equals("Search by Customer ID or Name...")) {
-            JOptionPane.showMessageDialog(this, "Please enter a term to search.", "Search Term Required", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        loadCustomers(term);
-        if (customerTableModel.getRowCount() == 0) {
-            JOptionPane.showMessageDialog(this, "No customers found matching \"" + term + "\".", "Search Result", JOptionPane.INFORMATION_MESSAGE);
-        }
-    }
-
-    private void loadCustomers() { loadCustomers(""); }
-
-    private void loadCustomers(String filter) {
-        try {
-            customerTableModel.setRowCount(0);
-            String sql = "SELECT customer_id, name FROM customer";
-            if (!filter.isEmpty()) {
-                sql += " WHERE customer_id LIKE ? OR name LIKE ?";
+            String sql = "SELECT item_code, description, unit_price FROM item";
+            if (!"All".equalsIgnoreCase(filter) && !filter.isEmpty() && !filter.equals("Search items here...")) {
+                sql += " WHERE description LIKE ?";
             }
             PreparedStatement ps = DBConnection.con.prepareStatement(sql);
-            if (!filter.isEmpty()) {
+            if (!"All".equalsIgnoreCase(filter) && !filter.isEmpty() && !filter.equals("Search items here...")) {
                 ps.setString(1, "%" + filter + "%");
-                ps.setString(2, "%" + filter + "%");
             }
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
-                customerTableModel.addRow(new Object[]{rs.getString("customer_id"), rs.getString("name")});
+                Products p = new Products(rs.getString("item_code"), rs.getString("description"), "", null, null, rs.getBigDecimal("unit_price"), 0, false);
+                productsMap.put(p.getProductID(), p);
+                productGridPanel.add(createProductCard(p));
             }
-            rs.close();
-            ps.close();
         } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Failed to load customers: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Error loading products: " + ex.getMessage());
         }
+        productGridPanel.revalidate();
+        productGridPanel.repaint();
     }
 
-    private void openNewCustomerDialog(java.awt.event.ActionEvent e) {
-        new CustomerDialog(this).setVisible(true);
-        loadCustomers();
-    }
-
-    private void onAddItem(java.awt.event.ActionEvent e) { new AddItemDialog(this).setVisible(true); }
-    private void onUpdateItem(java.awt.event.ActionEvent e) { new UpdateItemDialog(this).setVisible(true); }
-    private void onDeleteItem(java.awt.event.ActionEvent e) { new DeleteItemDialog(this).setVisible(true); }
-    private void onViewCustomers(java.awt.event.ActionEvent e) { loadCustomers(); }
-
-
-    private void onOrderItem(java.awt.event.ActionEvent e) {
-        new OrderItemsDialog(this, userID).setVisible(true);
-    }
-
-    private void onCustomerOrderDetail(java.awt.event.ActionEvent e) {
-        int selectedRow = customerTable.getSelectedRow();
-        if (selectedRow == -1) {
-            JOptionPane.showMessageDialog(this, "Please select a customer from the table first.", "No Customer Selected", JOptionPane.WARNING_MESSAGE);
-            return;
+    public void addItemToCart(Products product) {
+        if (cartItemsMap.containsKey(product.getProductID())) {
+            updateCartItemQuantity(product.getProductID(), 1);
+        } else {
+            CartItem newItem = new CartItem(product, 1);
+            cartItemsMap.put(product.getProductID(), newItem);
+            cartItemsPanel.add(createCartItemPanel(newItem));
         }
-        String customerId = (String) customerTableModel.getValueAt(selectedRow, 0);
-        new CustomerOrderDetailDialog(this, customerId).setVisible(true);
+        refreshCartUI();
     }
 
-    private void onLogout(java.awt.event.ActionEvent e) {
-        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to logout?", "Confirm Logout", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-        if (confirm == JOptionPane.YES_OPTION) {
-            dispose();
-            new Login().setVisible(true);
+    private void updateCartItemQuantity(String itemCode, int change) {
+        CartItem cartItem = cartItemsMap.get(itemCode);
+        if (cartItem == null) return;
+        cartItem.quantity += change;
+        if (cartItem.quantity <= 0) {
+            cartItemsMap.remove(itemCode);
+            cartItemsPanel.remove(cartItem.panel);
+        } else {
+            cartItem.quantityLabel.setText(String.valueOf(cartItem.quantity));
+            BigDecimal newTotal = cartItem.product.getPrice().multiply(new BigDecimal(cartItem.quantity));
+            cartItem.priceLabel.setText(new DecimalFormat("$##0.00").format(newTotal));
         }
+        refreshCartUI();
     }
 
-    private void onHold() { JOptionPane.showMessageDialog(this, "Sale has been put on hold."); }
+    private void refreshCartUI() {
+        cartItemsPanel.revalidate();
+        cartItemsPanel.repaint();
+        updateCheckoutTotals();
+    }
+
+    private void updateCheckoutTotals() {
+        BigDecimal subtotal = BigDecimal.ZERO;
+        for (CartItem item : cartItemsMap.values()) {
+            subtotal = subtotal.add(item.product.getPrice().multiply(new BigDecimal(item.quantity)));
+        }
+        BigDecimal discountPercent;
+        try {
+            double discount = Double.parseDouble(txtDiscount.getText().trim());
+            discount = Math.max(0, Math.min(100, discount));
+            discountPercent = BigDecimal.valueOf(discount / 100.0);
+        } catch (NumberFormatException e) {
+            discountPercent = BigDecimal.ZERO;
+        }
+        BigDecimal subtotalAfterDiscount = subtotal.subtract(subtotal.multiply(discountPercent));
+        BigDecimal tax = subtotalAfterDiscount.multiply(new BigDecimal("0.015"));
+        BigDecimal total = subtotalAfterDiscount.add(tax).setScale(2, RoundingMode.HALF_UP);
+        DecimalFormat df = new DecimalFormat("$#,##0.00");
+        lblSubTotalValue.setText(df.format(subtotal));
+        lblTaxValue.setText(df.format(tax));
+        lblTotalValue.setText(df.format(total));
+        btnPay.setText("Pay (" + df.format(total) + ")");
+    }
 
     private void onClearSale() {
-        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to clear the current sale?", "Clear Sale", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (confirm == JOptionPane.YES_OPTION) {
-            saleTableModel.setRowCount(0);
-            updateSaleTotals(); // Reset totals to zero
-            customerTable.clearSelection();
-            JOptionPane.showMessageDialog(this, "Sale cleared.");
+        if (JOptionPane.showConfirmDialog(this, "Are you sure you want to cancel this order?", "Cancel Order", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION) {
+            cartItemsMap.clear();
+            cartItemsPanel.removeAll();
+            selectedCustomerId = null;
+            lblSelectedCustomer.setText("(Guest)");
+            refreshCartUI();
         }
     }
 
     private void onCheckout() {
-        // --- VALIDATION ---
-        if (saleTableModel.getRowCount() == 0) {
-            JOptionPane.showMessageDialog(this, "There are no items in the current sale.", "Empty Sale", JOptionPane.WARNING_MESSAGE);
+        if (cartItemsMap.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "The cart is empty.", "Checkout Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        int selectedCustomerRow = customerTable.getSelectedRow();
-        if (selectedCustomerRow == -1) {
-            JOptionPane.showMessageDialog(this, "Please select a customer for this sale.", "No Customer Selected", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        String customerId = (String) customerTableModel.getValueAt(selectedCustomerRow, 0);
-
-        // --- PAYMENT ---
-        BigDecimal totalAmount = new BigDecimal(lblTotalValue.getText().replace("$", "").replace(",", ""));
+        BigDecimal totalAmount = new BigDecimal(lblTotalValue.getText().replaceAll("[^\\d.]", ""));
         PaymentDialog paymentDialog = new PaymentDialog(this, totalAmount);
         paymentDialog.setVisible(true);
-
-        if (!paymentDialog.isSucceeded()) {
-            return; // User cancelled or payment failed
-        }
-
-        // --- SAVE TO DATABASE ---
-        if (saveSaleToDatabase(customerId)) {
-            JOptionPane.showMessageDialog(this, "Checkout complete! Change due: " + paymentDialog.getChange(), "Success", JOptionPane.INFORMATION_MESSAGE);
-            // Clear sale for next transaction
-            saleTableModel.setRowCount(0);
-            updateSaleTotals();
-            customerTable.clearSelection();
-        } else {
-            JOptionPane.showMessageDialog(this, "There was an error saving the sale to the database.", "Database Error", JOptionPane.ERROR_MESSAGE);
+        if (paymentDialog.isSucceeded()) {
+            saveSaleToDatabase();
         }
     }
 
-    private boolean saveSaleToDatabase(String customerId) {
-        String orderId = "ORD" + String.valueOf(System.currentTimeMillis()).substring(7);
+    private void saveSaleToDatabase() {
+        // 1. Generate a unique Order ID that fits the database schema (e.g., VARCHAR(10)).
+        // Using a substring of the current time is a simple way to create a unique ID.
+        String orderId = "O" + String.valueOf(System.currentTimeMillis()).substring(4);
+
         try {
+            // 2. Begin a transaction. This ensures that all database operations
+            // either succeed together or fail together, preventing partial data saves.
             DBConnection.con.setAutoCommit(false);
 
-            // 1. Insert into `order` table
-            String insertOrderSQL = "INSERT INTO `order` (order_id, date, user_id) VALUES (?, CURRENT_DATE, ?)";
-            try (PreparedStatement psOrder = DBConnection.con.prepareStatement(insertOrderSQL)) {
-                psOrder.setString(1, orderId);
-                psOrder.setString(2, userID);
-                psOrder.executeUpdate();
+            // 3. Insert the main order record into the `order` table.
+            String orderSQL = "INSERT INTO `order` (order_id, date, user_id) VALUES (?, CURRENT_DATE, ?)";
+            try (PreparedStatement ps = DBConnection.con.prepareStatement(orderSQL)) {
+                ps.setString(1, orderId);
+                ps.setString(2, this.userID);
+                ps.executeUpdate();
             }
 
-            // 2. Insert into `customer_order` table
-            String insertCustOrderSQL = "INSERT INTO customer_order (customer_id, order_id) VALUES (?, ?)";
-            try (PreparedStatement psCustOrder = DBConnection.con.prepareStatement(insertCustOrderSQL)) {
-                psCustOrder.setString(1, customerId);
-                psCustOrder.setString(2, orderId);
-                psCustOrder.executeUpdate();
-            }
-
-            // 3. Insert into `order_item` table (batch update)
-            String insertOrderItemSQL = "INSERT INTO order_item (item_code, order_id, qty, unit_price) VALUES (?, ?, ?, ?)";
-            try (PreparedStatement psOrderItem = DBConnection.con.prepareStatement(insertOrderItemSQL)) {
-                for (int i = 0; i < saleTableModel.getRowCount(); i++) {
-                    psOrderItem.setString(1, saleTableModel.getValueAt(i, 0).toString()); // item_code
-                    psOrderItem.setInt(2, (int) saleTableModel.getValueAt(i, 2)); // qty
-                    psOrderItem.setBigDecimal(3, (BigDecimal) saleTableModel.getValueAt(i, 3)); // unit_price
-                    psOrderItem.setString(4, orderId); // order_id
-                    psOrderItem.addBatch();
+            // 4. (Optional) If a customer was selected, link them to the order.
+            if (this.selectedCustomerId != null) {
+                String customerOrderSQL = "INSERT INTO customer_order (customer_id, order_id) VALUES (?, ?)";
+                try (PreparedStatement ps = DBConnection.con.prepareStatement(customerOrderSQL)) {
+                    ps.setString(1, this.selectedCustomerId);
+                    ps.setString(2, orderId);
+                    ps.executeUpdate();
                 }
-                psOrderItem.executeBatch();
             }
 
+            // 5. Insert all cart items into the `order_item` table using a batch for efficiency.
+            String itemSQL = "INSERT INTO order_item (item_code, order_id, qty, unit_price) VALUES (?, ?, ?, ?)";
+            try (PreparedStatement ps = DBConnection.con.prepareStatement(itemSQL)) {
+                for (CartItem item : cartItemsMap.values()) {
+                    // Ensure parameter order matches the SQL statement's column order.
+                    ps.setString(1, item.product.getProductID()); // ? #1 is item_code
+                    ps.setString(2, orderId);                     // ? #2 is order_id
+                    ps.setInt(3, item.quantity);                  // ? #3 is qty
+                    ps.setBigDecimal(4, item.product.getPrice()); // ? #4 is unit_price
+                    ps.addBatch(); // Add the prepared statement to the batch.
+                }
+                ps.executeBatch(); // Execute all statements in the batch at once.
+            }
+
+            // 6. If all operations were successful, commit the transaction to save the changes.
             DBConnection.con.commit();
-            return true;
+
+            JOptionPane.showMessageDialog(this, "Checkout complete!", "Success", JOptionPane.INFORMATION_MESSAGE);
+            onClearSaleConfirmed(); // Clear the UI for the next sale.
 
         } catch (SQLException ex) {
+            // 7. If any error occurred, roll back the entire transaction.
             try {
                 DBConnection.con.rollback();
-            } catch (SQLException rollbackEx) {
-                System.err.println("Error rolling back transaction: " + rollbackEx.getMessage());
+            } catch (SQLException e) {
+                e.printStackTrace(); // Log rollback failure
             }
-            ex.printStackTrace();
-            return false;
+            JOptionPane.showMessageDialog(this, "Error saving sale: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            ex.printStackTrace(); // Print full error to console for debugging.
+
         } finally {
+            // 8. Always restore the default auto-commit behavior in a finally block.
             try {
                 DBConnection.con.setAutoCommit(true);
             } catch (SQLException e) {
                 e.printStackTrace();
             }
         }
+    }
+    private void onClearSaleConfirmed() {
+        cartItemsMap.clear();
+        cartItemsPanel.removeAll();
+        selectedCustomerId = null;
+        lblSelectedCustomer.setText("(Guest)");
+        refreshCartUI();
+    }
+
+
+    // --- Helper & Utility Methods ---
+    private void selectCustomer() {
+        CustomerSelectionDialog dialog = new CustomerSelectionDialog(this);
+        dialog.setVisible(true);
+        if (dialog.hasSelectedCustomer()) {
+            selectedCustomerId = dialog.getSelectedCustomerId();
+            lblSelectedCustomer.setText(dialog.getSelectedCustomerName());
+        }
+    }
+
+    private JButton createAdminMenu() {
+        JButton adminButton = createHeaderIcon("https://img.icons8.com/fluency-systems-regular/28/ffffff/admin-settings-male.png");
+        JPopupMenu adminMenu = new JPopupMenu();
+        JMenuItem updateItem = new JMenuItem("Update Item");
+        updateItem.addActionListener(e -> new UpdateItemDialog(this).setVisible(true));
+        adminMenu.add(updateItem);
+        JMenuItem deleteItem = new JMenuItem("Delete Item");
+        deleteItem.addActionListener(e -> new DeleteItemDialog(this).setVisible(true));
+        adminMenu.add(deleteItem);
+        adminButton.addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+                adminMenu.show(e.getComponent(), 0, e.getComponent().getHeight());
+            }
+        });
+        return adminButton;
+    }
+
+    private void styleButton(JButton button, Color bg, Color fg, Font font) { button.setBackground(bg); button.setForeground(fg); button.setFont(font); button.setFocusPainted(false); }
+    private JButton createHeaderIcon(String url) { JButton b = new JButton(createIcon(url)); b.setBorder(null); b.setContentAreaFilled(false); b.setCursor(new Cursor(Cursor.HAND_CURSOR)); return b; }
+    private GridBagConstraints createGbc() { GridBagConstraints gbc = new GridBagConstraints(); gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0; gbc.insets = new Insets(4, 4, 4, 4); return gbc; }
+    private ImageIcon createIcon(String urlString) { try { return new ImageIcon(new ImageIcon(new URL(urlString)).getImage().getScaledInstance(28, 28, Image.SCALE_SMOOTH)); } catch (Exception e) { return new ImageIcon(new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB)); } }
+
+    private JLabel createCircularImageLabel(String defaultIconUrl) {
+        JLabel label = new JLabel();
+        label.setPreferredSize(new Dimension(45, 45));
+        try {
+            Image img = new ImageIcon(new URL(defaultIconUrl)).getImage();
+            label.setIcon(new ImageIcon(createCircularImage(img, 45)));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return label;
+    }
+
+    private void loadUserProfilePicture(JLabel label) {
+        try {
+            String sql = "SELECT profile_picture FROM user_profile_picture WHERE user_id = ?";
+            PreparedStatement ps = DBConnection.con.prepareStatement(sql);
+            ps.setString(1, userID);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next() && rs.getBytes("profile_picture") != null) {
+                Image img = Toolkit.getDefaultToolkit().createImage(rs.getBytes("profile_picture"));
+                label.setIcon(new ImageIcon(createCircularImage(img, 45)));
+            }
+        } catch (Exception e) {
+            System.err.println("Could not load user profile picture: " + e.getMessage());
+        }
+    }
+
+    private Image createCircularImage(Image image, int diameter) {
+        BufferedImage bImg = new BufferedImage(diameter, diameter, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = bImg.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setClip(new Ellipse2D.Float(0, 0, diameter, diameter));
+        g2.drawImage(image, 0, 0, diameter, diameter, null);
+        g2.dispose();
+        return bImg;
     }
 }
