@@ -23,12 +23,13 @@ public class DBConnection {
 		}
 	}
 
-	public String getUserID(){
-		return (userID);
-	}
-
-	public void setUserID(String userID){
-		this.userID = userID;
+	private static void setupTestData() throws Exception {
+		con.createStatement().execute("CREATE TABLE user_role (id INT PRIMARY KEY, role VARCHAR(50))");
+		con.createStatement().execute("CREATE TABLE user (user_id VARCHAR(50) PRIMARY KEY, password VARCHAR(50), user_role_id INT)");
+		con.createStatement().execute("INSERT INTO user_role VALUES (1, 'Admin'), (2, 'Cashier')");
+		// Passwords should be hashed in a real system!
+		con.createStatement().execute("INSERT INTO user VALUES ('admin', 'admin123', 1)");
+		con.createStatement().execute("INSERT INTO user VALUES ('cashier1', 'pass', 2)");
 	}
 
 }
