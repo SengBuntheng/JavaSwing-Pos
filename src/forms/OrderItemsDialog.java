@@ -1,6 +1,7 @@
 package forms;
 
 import globalValues.DBConnection;
+import globalValues.Products; // Import the Products class
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -16,9 +17,9 @@ import java.text.DecimalFormat;
 
 public class OrderItemsDialog extends JDialog {
 
-    // --- UI Design Constants (from MainPanel for consistency) ---
+    // --- UI Design Constants ---
     private static final Color COLOR_BG_MAIN = new Color(248, 249, 250);
-    private static final Color COLOR_PRIMARY = new Color(13, 110, 253);
+    private static final Color COLOR_PRIMARY = new Color(1, 126, 81); // Updated color
     private static final Color COLOR_SUCCESS = new Color(25, 135, 84);
     private static final Color COLOR_TEXT_DARK = new Color(33, 37, 41);
     private static final Color COLOR_TEXT_LIGHT = Color.WHITE;
@@ -26,15 +27,15 @@ public class OrderItemsDialog extends JDialog {
     private static final Font FONT_BOLD = new Font("Segoe UI", Font.BOLD, 15);
 
     // --- Components ---
-    private JComboBox<Item> cbItems;
+    private JComboBox<Products> cbItems; // Changed to use Products object
     private JTextField txtQty;
     private JLabel lblUnitPrice;
     private JLabel lblExtPrice;
     private final MainPanel mainPanel; // Reference to the main panel
 
-    public OrderItemsDialog(MainPanel parent, String userId) {
+    public OrderItemsDialog(MainPanel parent) { // Removed unused userId parameter
         super(parent, "Add Item to Sale", true);
-        this.mainPanel = parent; // Store the reference
+        this.mainPanel = parent;
 
         setSize(500, 350);
         setLocationRelativeTo(parent);
@@ -108,6 +109,7 @@ public class OrderItemsDialog extends JDialog {
                 updatePrices();
             }
         });
+        getRootPane().setDefaultButton(btnAddItem);
     }
 
     private JButton createButton(String text, Color bg, ActionListener listener) {
@@ -127,11 +129,15 @@ public class OrderItemsDialog extends JDialog {
              ResultSet rs = ps.executeQuery()) {
             cbItems.removeAllItems();
             while (rs.next()) {
-                cbItems.addItem(new Item(
+                // Create a full Products object
+                Products product = new Products(
                         rs.getString("item_code"),
                         rs.getString("description"),
-                        rs.getBigDecimal("unit_price")
-                ));
+                        "", null, null, // Placeholder values for unused fields
+                        rs.getBigDecimal("unit_price"),
+                        0, false
+                );
+                cbItems.addItem(product);
             }
             if (cbItems.getItemCount() > 0) {
                 cbItems.setSelectedIndex(0);
@@ -144,7 +150,7 @@ public class OrderItemsDialog extends JDialog {
     }
 
     private void updatePrices() {
-        Item selected = (Item) cbItems.getSelectedItem();
+        Products selected = (Products) cbItems.getSelectedItem();
         if (selected == null) {
             lblUnitPrice.setText("$0.00");
             lblExtPrice.setText("$0.00");
@@ -152,7 +158,7 @@ public class OrderItemsDialog extends JDialog {
         }
 
         DecimalFormat df = new DecimalFormat("$#,##0.00");
-        lblUnitPrice.setText(df.format(selected.unitPrice));
+        lblUnitPrice.setText(df.format(selected.getPrice()));
 
         int qty;
         try {
@@ -162,12 +168,12 @@ public class OrderItemsDialog extends JDialog {
             qty = 1;
         }
 
-        BigDecimal extPrice = selected.unitPrice.multiply(new BigDecimal(qty));
+        BigDecimal extPrice = selected.getPrice().multiply(new BigDecimal(qty));
         lblExtPrice.setText(df.format(extPrice));
     }
 
     private void addItemToSale(java.awt.event.ActionEvent e) {
-        Item selected = (Item) cbItems.getSelectedItem();
+        Products selected = (Products) cbItems.getSelectedItem();
         if (selected == null) {
             JOptionPane.showMessageDialog(this, "Please select an item.", "Warning", JOptionPane.WARNING_MESSAGE);
             return;
@@ -185,28 +191,14 @@ public class OrderItemsDialog extends JDialog {
             return;
         }
 
-        mainPanel.addItemToCurrentSale(selected.itemCode, selected.description, qty, selected.unitPrice);
-
-        txtQty.setText("1");
-        cbItems.requestFocus();
-        updatePrices();
-    }
-
-    // Inner class to hold item data in the JComboBox
-    private static class Item {
-        String itemCode;
-        String description;
-        BigDecimal unitPrice;
-
-        public Item(String itemCode, String description, BigDecimal unitPrice) {
-            this.itemCode = itemCode;
-            this.description = description;
-            this.unitPrice = unitPrice;
+        // **FIX:** Call the correct method in the new MainPanel
+        // The new method may need to be made public if it isn't already.
+        // We will add the item 'qty' times.
+        for (int i = 0; i < qty; i++) {
+            mainPanel.addItemToCart(selected);
         }
 
-        @Override
-        public String toString() {
-            return description + " (" + itemCode + ")";
-        }
+        // Close dialog after adding
+        dispose();
     }
 }
